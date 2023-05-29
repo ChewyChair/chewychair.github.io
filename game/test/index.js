@@ -32,13 +32,15 @@ class Player {
 }
 
 class Projectile {
-    constructor(x, y, radius, color, velocity, angle) {
+    constructor(x, y, radius, length, color, velocity, angle, pierce) {
         this.x = x
         this.y = y
         this.radius = radius
+        this.length = length
         this.color = color
         this.velocity = velocity
         this.angle = angle
+        this.pierce = pierce
     }
 
     draw() {
@@ -47,7 +49,7 @@ class Projectile {
         c.translate(this.x, this.y)
         c.rotate(this.angle)
         c.fillStyle = this.color
-        c.fillRect(0, 0, this.radius*10, this.radius)
+        c.fillRect(0, 0, this.length, this.radius)
         c.restore()
     }
 
@@ -119,31 +121,40 @@ class Particle {
 }
 
 class DamagePopup {
-    constructor(x, y, damage, color, velocity) {
+    constructor(x, y, damage, color, velocity, crit) {
         this.x = x
         this.y = y
         this.damage = damage
         this.color = color
         this.velocity = velocity
         this.alpha = 1
+        this.crit = crit
     }
 
     draw() {
         c.save()
         c.globalAlpha = this.alpha
-        c.font = `${Math.round(this.damage * 2)}px arial`
+        c.font = `${Math.round(10 + this.damage * 0.5)}px arial`
         c.fillStyle = this.color
-        c.fillText(this.damage, this.x, this.y)
+        if (this.crit == 1)  {
+            c.fillText(this.damage + "!", this.x, this.y)
+        } else {
+            c.fillText(this.damage, this.x, this.y)
+        }
         c.restore()
     }
 
     update() {
         this.draw()
         this.velocity.x *= friction
-        this.velocity.y *= friction
+        this.velocity.y += 0.00002
         this.x = this.x + this.velocity.x
         this.y = this.y + this.velocity.y
-        this.alpha -= 0.01
+        if (this.crit == 1) {
+            this.alpha -= 0.0025
+        } else {
+            this.alpha -= 0.005
+        }
     }
 }
 
@@ -169,6 +180,7 @@ function init() {
 }
 
 let difficulty = 1
+let delay = 1000
 function spawnEnemies() {
     setInterval(() => {
         const radius = Math.random() * 15 * difficulty + 20
@@ -193,16 +205,20 @@ function spawnEnemies() {
             y: Math.sin(angle)
         }
 
+        delay -= 0.2
         enemies.push(new Enemy(x, y, radius, color, velocity))
-    }, 1000)
+    }, delay)
 }
 
 let animationId
 let score = 0
 let upgradeScore = 1000
+let rawDamage = 7
+let crit = 0.05
+let critMult = 1.5
 function animate() {
     animationId = requestAnimationFrame(animate)
-    c.fillStyle = 'rgba(0, 0, 0, 0.1)'
+    c.fillStyle = 'rgba(0, 0, 0, 1)'
     c.fillRect(0, 0, canvas.width, canvas.height)
     player.draw()
     projectiles.forEach((projectile, index) => {
@@ -229,35 +245,53 @@ function animate() {
         projectiles.forEach((projectile, projectileIndex) => {
             const dist = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y)
             if (dist - enemy.radius - projectile.radius < 1) {
-                score += 10
-                scoreEl.innerHTML = score
 
-                let damage = Math.round(Math.random()*2 + 5)
-                damagePopups.push(new DamagePopup(enemy.x, enemy.y, damage, "red", {x: 0, y: 0}))
+                let damage = Math.round(Math.random()*0.4*rawDamage + rawDamage)
+                let isCrit = 0
+                if (projectile.color == "red") {
+                    isCrit = 1
+                    damage *= critMult
+                    damage = Math.round(damage)
+                }
+                damagePopups.push(new DamagePopup(enemy.x, enemy.y, damage, "red", {x: ((Math.random() - 0.5) * 0.5), y: 0.1}, isCrit))
                 for (let i = 0; i < Math.min(20, enemy.radius); i++) {
-                    particles.push(new Particle(projectile.x, projectile.y, Math.random() * 2, enemy.color, {x: (Math.random() - 0.5) * 3, y: (Math.random() - 0.5) * 3}))
+                    particles.push(new Particle(projectile.x, projectile.y, Math.random() * 0.2 *damage, enemy.color, {x: (Math.random() * 0.2) * -projectile.velocity.x, y: (Math.random() * 0.3 - 0.15) * -projectile.velocity.y}))
                 }
                 if (enemy.radius > 10 + damage) {
+                    score += damage
+                    scoreEl.innerHTML = score
                     gsap.to(enemy, {
                         radius: enemy.radius - damage
                     })
+                } else {
+                    score += Math.round(enemy.radius - 9)
+                    scoreEl.innerHTML = score
+
+                    for (let i = 0; i < Math.min(20, enemy.radius); i++) {
+                        particles.push(new Particle(projectile.x, projectile.y, Math.random() * 0.2 *damage, enemy.color, {x: (Math.random() * 0.2) * projectile.velocity.x, y: (Math.random() * 0.3 - 0.15) * projectile.velocity.y}))
+                    }
+
+                    for (let i = 0; i < Math.min(20, enemy.radius); i++) {
+                        particles.push(new Particle(projectile.x, projectile.y, Math.random() * 0.5 * enemy.radius, enemy.color, {x: (Math.random() - 0.5), y: (Math.random() - 0.5)}))
+                    }
+
+                    setTimeout(() => {
+                        enemies.splice(index, 1)
+                    }, 0)
+                }
+                if (projectile.pierce == 0) {
                     setTimeout(() => {
                         projectiles.splice(projectileIndex, 1)
                     }, 0)
                 } else {
-                    score += 25
-                    scoreEl.innerHTML = score
-
-                    setTimeout(() => {
-                        enemies.splice(index, 1)
-                        projectiles.splice(projectileIndex, 1)
-                    }, 0)
+                    projectile.pierce -= 1
                 }
             }
             if (score >= upgradeScore) {
                 cancelAnimationFrame(animationId)
                 upgradeModal.style.display = 'flex'
-                upgradeScore += 1000
+                upgradeScore *= 1.25
+                upgradeScore += 300
             }
         })
         particles.forEach((particle, particleIndex) => {
@@ -280,38 +314,48 @@ function animate() {
 let mousedown = false
 let mousex = 0
 let mousey = 0
-addEventListener('mousedown', (event) => {
-    console.log("mousedown")
+addEventListener('pointerdown', (event) => {
+    mousex = event.clientX
+    mousey = event.clientY
     mousedown = true
-    // const angle = Math.atan2(event.clientY - canvas.height / 2, event.clientX - canvas.width / 2)
-    // const velocity = {
-    //     x: Math.cos(angle) * 40,
-    //     y: Math.sin(angle) * 40
-    // }
-    // projectiles.push(new Projectile(canvas.width / 2, canvas.height / 2, 5, 'white', velocity, angle))
 })
 
-addEventListener('mouseup', () => {
-    console.log("mouseup")
+addEventListener('pointerup', () => {
     mousedown = false
 })
 
-addEventListener('mousemove', (event) => {
+addEventListener('pointerout', () => {
+    mousedown = false
+})
+
+// addEventListener('mousemove', (event) => {
+//     mousex = event.clientX
+//     mousey = event.clientY
+// })
+
+addEventListener('pointermove', (event) => {
     mousex = event.clientX
     mousey = event.clientY
 })
 
-let fireCooldown = 100
+let fireCurrCd = 0
+let fireCooldown = 50
+let fireRate = 1
 let recoil = 40
 let recoilRecovery = 20 / 30
 let recoilCurr = 0
 let recoilMax = 400
 let recoilCooldown = 0
+let recoilCooldownRate = 1
+let projVel = 20
+let projWidth = 3
+let pierce = 0
+let isGameRunning = 0
 function runGame() {
     setInterval(() => {
         difficulty += 0.00005
-        fireCooldown -= 1
-        recoilCooldown -= 1
+        fireCurrCd -= fireRate
+        recoilCooldown -= recoilCooldownRate
         if (recoilCurr < recoilRecovery) {
             recoilCurr = 0
         } else {
@@ -320,33 +364,101 @@ function runGame() {
         if (recoilCooldown <= 0) {
             recoilCurr = 0
         }
-        if (mousedown && fireCooldown <= 0) {
-            console.log("fire")
+        if (mousedown && fireCurrCd <= 0) {
             const angle = Math.atan2(mousey - canvas.height / 2, mousex - canvas.width / 2) + 
                 (Math.random() - 0.5) * 0.0025 * recoilCurr +
                 (Math.random() - 0.5) * 0.01
             const velocity = {
-                x: Math.cos(angle) * 40,
-                y: Math.sin(angle) * 40
+                x: Math.cos(angle) * projVel,
+                y: Math.sin(angle) * projVel
             }
-            projectiles.push(new Projectile(canvas.width / 2, canvas.height / 2, 5, 'white', velocity, angle))
-            fireCooldown = 30
+            let audio = new Audio('sfx/gunshot.mp3')
+            if (Math.random() <= crit) {
+                projectiles.push(new Projectile(canvas.width / 2, canvas.height / 2, projWidth, projVel * 2, "red", velocity, angle, pierce))
+            } else {
+                projectiles.push(new Projectile(canvas.width / 2, canvas.height / 2, projWidth, projVel * 2, "white", velocity, angle, pierce))
+            }
+            audio.play()
+            fireCurrCd = fireCooldown
             if (recoilCurr < recoilMax - recoil) {
                 recoilCurr += recoil
             } else {
                 recoilCurr = recoilMax
             }
-            recoilCooldown = 3 * fireCooldown
+            recoilCooldown = 3 * fireCooldown / fireRate
         }
     }, 1)
 }
 
 startGameBtn.addEventListener('click', () => {
+    difficulty = 1
+    rawDamage = 6
+    fireCurrCd = 0
+    fireCooldown = 50
+    fireRate = 1
+    recoil = 40
+    recoilRecovery = 20 / 30
+    recoilCurr = 0
+    recoilMax = 400
+    recoilCooldown = 0
+    recoilCooldownRate = 1
+    crit = 0.05
+    critMult = 1.5
+    projVel = 20
+    projWidth = 5
+    pierce = 0
+    upgradeScore = 300
+    delay = 1000
     init()
     animate()
-    spawnEnemies()
-    runGame()
+    if (isGameRunning == 0) {
+        runGame()
+        spawnEnemies()
+        isGameRunning = 1
+    }
     startGameModal.style.display = 'none'
 })
 
+upgradeBtn1.addEventListener('click', () => {
+    rawDamage += 1
+    projWidth += 0.25
+    upgradeModal.style.display = 'none'
+    animate()
+})
+
+// upgradeBtn1.addEventListener('click', () => {
+//     rawDamage *= 2
+//     projWidth += 1
+//     projVel += 10
+//     fireRate *= 0.5
+//     crit += 0.25
+//     critMult += 1
+//     pierce += 1
+//     upgradeModal.style.display = 'none'
+//     animate()
+// })
+
+upgradeBtn2.addEventListener('click', () => {
+    fireRate += 0.1
+    crit += 0.01
+    critMult += 0.05
+    upgradeModal.style.display = 'none'
+    animate()
+})
+
+upgradeBtn3.addEventListener('click', () => {
+    recoil *= 0.95
+    recoilMax *= 0.95
+    recoilCooldownRate += 0.1
+    upgradeModal.style.display = 'none'
+    animate()
+})
+
 upgradeModal.style.display = 'none'
+
+window.oncontextmenu = function(event) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return false
+};
