@@ -33,6 +33,29 @@ class Shiba {
         this.bork = bork;
     }
 
+    draw() {
+        switch(this.mode) {
+            case "chase":
+                // fallthrough
+            case "chaseBall":
+                // fallthrough
+            case "explore":
+                this.drawMotion();
+                break;
+            case "idle":
+                // fallthrough
+            case "lie":
+                // fallthrough
+            case "exploreidle":
+                this.drawStandard(15);
+                break;
+            case "sleep":
+                this.drawStandard(25);
+                break;
+            default:
+        }
+    }
+
     drawMotion() {
         this.ticks++;
         if (this.ticks % 12 == 0) {
@@ -181,7 +204,6 @@ class Shiba {
                 ball.dz = 0;
             }
         }
-        this.drawMotion();
     }
 
     chaseBall(dx, dy) {
@@ -226,8 +248,6 @@ class Shiba {
                 }
             }
         }
-
-        this.drawMotion();
     }
 
     explore(x, y, dx, dy) {
@@ -269,8 +289,6 @@ class Shiba {
             this.resetMode();
             this.mode = "exploreidle";
         }
-
-        this.drawMotion();
     }
 
     idle() {
@@ -294,7 +312,6 @@ class Shiba {
             this.row = 0;
             this.shadowCol = 0;
         }
-        this.drawStandard(15);
     }
 
     exploreidle() {
@@ -321,7 +338,6 @@ class Shiba {
             this.row = 0;
             this.shadowCol = 0;
         }
-        this.drawStandard(15);
     }
 
     lie() {
@@ -351,7 +367,6 @@ class Shiba {
             this.row = 4;
             this.shadowCol = 2;
         }
-        this.drawStandard(15);
     }
 
     sleep() {
@@ -369,7 +384,6 @@ class Shiba {
             this.resetMode();
             this.mode = "lie";
         }
-        this.drawStandard(25);
     }
 }
 
@@ -551,7 +565,6 @@ function getDistanceFromCursor(object) {
 
 const x = canvas.width / 2
 const y = canvas.height / 2
-let shiba;
 
 function spawnGrassAndDirt() {
     for (let i = 0; i < 20 + Math.random() * 10; i++) {
@@ -571,9 +584,9 @@ function drawDirt() {
 }
 
 function drawBackground() {
-      // forgot to take note of rendering order so this is a stopgap solution
-      // 8 is custom offset if not ball will appear incorrectly
-      if (ball.y + ball.height / 2 <= shiba.y + shiba.height / 2 - 8) {
+    // forgot to take note of rendering order so this is a stopgap solution
+    // 8 is custom offset if not ball will appear incorrectly
+    if (ball.y + ball.height / 2 <= shiba.y + shiba.height / 2 - 8) {
         grasses.forEach((grass) => {
             if ((grass.y + grass.height / 2 <= shiba.y + shiba.height / 2) && (grass.y + grass.height / 2 <= ball.y + ball.height *0.75)) {
                 grass.draw();
@@ -581,7 +594,7 @@ function drawBackground() {
         })
         ball.draw();
         grasses.forEach((grass) => {
-            if ((grass.y + grass.height / 2 <= shiba.y + shiba.height / 2) && (grass.y + grass.height / 2 > ball.y + ball.height *0.75)) {
+            if ((grass.y + grass.height / 2 <= shiba.y + shiba.height / 2) && (grass.y + grass.height / 2 >= ball.y + ball.height *0.75)) {
                 grass.draw();
             }
         })
@@ -596,21 +609,21 @@ function drawBackground() {
 
 function drawForeground() {
     // forgot to take note of rendering order so this is a stopgap solution
-    if (ball.y + ball.height / 2 > shiba.y + shiba.height / 2 - 8) {
+    if (ball.y + ball.height / 2 >= shiba.y + shiba.height / 2 - 8) {
         grasses.forEach((grass) => {
-            if ((grass.y + grass.height / 2 > shiba.y + shiba.height / 2) && (grass.y + grass.height / 2 <= ball.y + ball.height *0.75)) {
+            if ((grass.y + grass.height / 2 >= shiba.y + shiba.height / 2) && (grass.y + grass.height / 2 <= ball.y + ball.height *0.75)) {
                 grass.draw();
             }
         })
         ball.draw();
         grasses.forEach((grass) => {
-            if ((grass.y + grass.height / 2 > shiba.y + shiba.height / 2) && (grass.y + grass.height / 2 > ball.y + ball.height *0.75)) {
+            if ((grass.y + grass.height / 2 >= shiba.y + shiba.height / 2) && (grass.y + grass.height / 2 >= ball.y + ball.height *0.75)) {
                 grass.draw();
             }
         })
     } else {
         grasses.forEach((grass) => {
-            if (grass.y + grass.height / 2 > shiba.y + shiba.height / 2) {
+            if (grass.y + grass.height / 2 >= shiba.y + shiba.height / 2) {
                 grass.draw();
             }
         })
@@ -638,10 +651,11 @@ function animate() {
     c.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     c.fillStyle = "green";
     c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    shiba.update();
     ball.update();
     drawDirt();
     drawBackground();
-    shiba.update();
+    shiba.draw();
     drawForeground();
     drawHearts();
     requestAnimationFrame(animate);
